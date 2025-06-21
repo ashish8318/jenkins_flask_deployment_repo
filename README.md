@@ -1,1 +1,1 @@
-# jenkins_flask_deployment_repo
+# jenkins_gitops_pipeline
