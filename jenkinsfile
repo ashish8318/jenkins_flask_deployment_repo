@@ -49,7 +49,7 @@ pipeline {
             returnStdout: true
           ).trim().split()
 
-          def numericTags = tagList.findAll { it ==~ /^\\d+\$/ }*.toInteger()
+          def numericTags = tagList.findAll { it ==~ /^\d+$/ }.collect { it.toInteger() }
           def nextTag = numericTags ? (numericTags.max() + 1) : 1
           env.IMAGE_TAG = "${nextTag}"
 
