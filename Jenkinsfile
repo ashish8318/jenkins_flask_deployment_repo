@@ -35,34 +35,34 @@ pipeline {
   }
 }
 
-    // stage('Build & Push Docker Image') {
-    //   steps {
-    //     script {
-    //       def repoUri = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.ECR_REPO}"
+    stage('Build & Push Docker Image') {
+      steps {
+        script {
+          def repoUri = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.ECR_REPO}"
 
-    //       sh """
-    //         aws ecr get-login-password --region ${env.AWS_REGION} | docker login --username AWS --password-stdin ${repoUri}
-    //       """
+          sh """
+            aws ecr get-login-password --region ${env.AWS_REGION} | docker login --username AWS --password-stdin ${repoUri}
+          """
 
-    //       def tagList = sh(
-    //         script: "aws ecr list-images --repository-name ${env.ECR_REPO} --region ${env.AWS_REGION} --query 'imageIds[*].imageTag' --output text",
-    //         returnStdout: true
-    //       ).trim().split()
+          def tagList = sh(
+            script: "aws ecr list-images --repository-name ${env.ECR_REPO} --region ${env.AWS_REGION} --query 'imageIds[*].imageTag' --output text",
+            returnStdout: true
+          ).trim().split()
 
-    //       def numericTags = tagList.findAll { it ==~ /^\d+$/ }.collect { it.toInteger() }
-    //       def nextTag = numericTags ? (numericTags.max() + 1) : 1
-    //       env.IMAGE_TAG = "${nextTag}"
+          def numericTags = tagList.findAll { it ==~ /^\d+$/ }.collect { it.toInteger() }
+          def nextTag = numericTags ? (numericTags.max() + 1) : 1
+          env.IMAGE_TAG = "${nextTag}"
 
-    //       echo "Building Docker Image with Tag: ${env.IMAGE_TAG}"
+          echo "Building Docker Image with Tag: ${env.IMAGE_TAG}"
 
-    //       sh """
-    //         docker build -t ${repoUri}:${env.IMAGE_TAG} .
-    //         docker tag ${repoUri}:${env.IMAGE_TAG} ${repoUri}:${env.IMAGE_TAG}
-    //         docker push ${repoUri}:${env.IMAGE_TAG}
-    //       """
-    //     }
-    //   }
-    // }
+          sh """
+            docker build -t ${repoUri}:${env.IMAGE_TAG} .
+            docker tag ${repoUri}:${env.IMAGE_TAG} ${repoUri}:${env.IMAGE_TAG}
+            docker push ${repoUri}:${env.IMAGE_TAG}
+          """
+        }
+      }
+    }
 
     // stage('Update GitOps Repo') {
     //   steps {
