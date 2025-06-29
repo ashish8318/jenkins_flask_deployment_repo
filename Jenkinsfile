@@ -17,7 +17,6 @@ pipeline {
           string(credentialsId: 'GIT_AUTHOR_NAME', variable: 'AUTHOR_NAME')
         ]) {
           script {
-            // Save them to env so other stages can access
             env.AWS_REGION = AWS_REGION
             env.ECR_REPO = ECR_REPO
             env.GIT_REPO = GIT_REPO
@@ -30,22 +29,27 @@ pipeline {
     }
 
     stage('Checkout Code') {
-  steps {
-    git url: "${env.GIT_REPO}", branch: 'main'
-  }
-}
+      steps {
+        git url: "${env.GIT_REPO}", branch: 'main'
+      }
+    }
 
     stage('Build & Push Docker Image') {
       steps {
         script {
-          def repoUri = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.ECR_REPO}"
+          def repoUri = "${env.ECR_REPO}"
 
-          sh """
-            aws ecr get-login-password --region ${env.AWS_REGION} | docker login --username AWS --password-stdin ${repoUri}
+          // Login to ECR
+          bat """
+            aws ecr get-login-password --region %AWS_REGION% | docker login --username AWS --password-stdin ${repoUri}
           """
 
-          def tagList = sh(
-            script: "aws ecr list-images --repository-name ${env.ECR_REPO} --region ${env.AWS_REGION} --query 'imageIds[*].imageTag' --output text",
+          // Fetch and parse image tags (uses PowerShell)
+          def tagList = bat(
+            script: """
+              @echo off
+              for /f "tokens=*" %%a in ('aws ecr list-images --repository-name %ECR_REPO% --region %AWS_REGION% --query "imageIds[*].imageTag" --output text') do echo %%a
+            """,
             returnStdout: true
           ).trim().split()
 
@@ -55,7 +59,7 @@ pipeline {
 
           echo "Building Docker Image with Tag: ${env.IMAGE_TAG}"
 
-          sh """
+          bat """
             docker build -t ${repoUri}:${env.IMAGE_TAG} .
             docker tag ${repoUri}:${env.IMAGE_TAG} ${repoUri}:${env.IMAGE_TAG}
             docker push ${repoUri}:${env.IMAGE_TAG}
@@ -64,23 +68,27 @@ pipeline {
       }
     }
 
-    // stage('Update GitOps Repo') {
-    //   steps {
-    //     script {
-    //       def repoUri = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.ECR_REPO}"
-    //       sh """
-    //         git clone ${env.GIT_REPO} gitops-temp
-    //         cd gitops-temp
+    // For now, leaving this block commented — it uses Unix-style commands like sed and needs a Windows equivalent
+    // Let me know if you want this ported to PowerShell or Git Bash
+    /*
+    stage('Update GitOps Repo') {
+      steps {
+        script {
+          def repoUri = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.ECR_REPO}"
+          bat """
+            git clone ${env.GIT_REPO} gitops-temp
+            cd gitops-temp
 
-    //         sed -i "s|image: .*|image: ${repoUri}:${env.IMAGE_TAG}|" deployment.yaml
+            powershell -Command "(Get-Content deployment.yaml) -replace 'image: .*', 'image: ${repoUri}:${env.IMAGE_TAG}' | Set-Content deployment.yaml"
 
-    //         git config user.email "${env.AUTHOR_EMAIL}"
-    //         git config user.name "${env.AUTHOR_NAME}"
-    //         git commit -am "Update image tag to ${env.IMAGE_TAG}"
-    //         git push origin main
-    //       """
-    //     }
-    //   }
-    // }
+            git config user.email "${env.AUTHOR_EMAIL}"
+            git config user.name "${env.AUTHOR_NAME}"
+            git commit -am "Update image tag to ${env.IMAGE_TAG}"
+            git push origin main
+          """
+        }
+      }
+    }
+    */
   }
 }
