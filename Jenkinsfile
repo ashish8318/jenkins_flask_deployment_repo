@@ -31,7 +31,7 @@ pipeline {
 
     stage('Checkout Code') {
       steps {
-        git "${env.GIT_REPO}"
+        git clone "${env.GIT_REPO}"
       }
     }
 
