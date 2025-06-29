@@ -30,10 +30,10 @@ pipeline {
     }
 
     stage('Checkout Code') {
-      steps {
-        git clone "${env.GIT_REPO}"
-      }
-    }
+  steps {
+    git url: "${env.GIT_REPO}", branch: 'main'
+  }
+}
 
     // stage('Build & Push Docker Image') {
     //   steps {
