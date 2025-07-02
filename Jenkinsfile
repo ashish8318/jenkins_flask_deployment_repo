@@ -3,7 +3,7 @@ pipeline {
 
   environment {
     IMAGE_TAG = '' // will be set later dynamically
-    ROLE_ARN = 'arn:aws:iam::<ACCOUNT_ID>:role/ECRPushRole' // Update with your actual role ARN
+    ROLE_ARN = 'arn:aws:iam::420866608360:role/ECR_Push_Role' // Update with your actual role ARN
   }
 
   stages {
