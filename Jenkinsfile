@@ -3,6 +3,7 @@ pipeline {
 
   environment {
     IMAGE_TAG = '' // will be set later dynamically
+    ROLE_ARN = 'arn:aws:iam::<ACCOUNT_ID>:role/ECRPushRole' // Update with your actual role ARN
   }
 
   stages {
@@ -34,61 +35,44 @@ pipeline {
       }
     }
 
-    stage('Build & Push Docker Image') {
+    stage('Assume Role and Build & Push Docker Image') {
       steps {
         script {
           def repoUri = "${env.ECR_REPO}"
 
-          // Login to ECR
+          // Step 1: Assume Role
           bat """
-            aws ecr get-login-password --region %AWS_REGION% | docker login --username AWS --password-stdin ${repoUri}
+          powershell -Command \"
+          \$role = aws sts assume-role --role-arn '${ROLE_ARN}' --role-session-name 'jenkins-session' | ConvertFrom-Json;
+          \$env:AWS_ACCESS_KEY_ID = \$role.Credentials.AccessKeyId;
+          \$env:AWS_SECRET_ACCESS_KEY = \$role.Credentials.SecretAccessKey;
+          \$env:AWS_SESSION_TOKEN = \$role.Credentials.SessionToken;
+
+          # Step 2: Login to ECR
+          aws ecr get-login-password --region ${env.AWS_REGION} |
+            docker login --username AWS --password-stdin ${repoUri};
+
+          # Step 3: Determine next image tag
+          \$tags = aws ecr list-images --repository-name ${env.ECR_REPO} --region ${env.AWS_REGION} --query 'imageIds[*].imageTag' --output text;
+          \$numTags = \$tags -split '\\s+' | Where-Object { \$_ -match '^[0-9]+$' } | ForEach-Object { [int]\$_ };
+          \$nextTag = (\$numTags | Measure-Object -Maximum).Maximum + 1;
+          if (!\$nextTag) { \$nextTag = 1 }
+          echo IMAGE_TAG=\$nextTag > tag.txt
+          \"
           """
 
-          // Fetch and parse image tags (uses PowerShell)
-          def tagList = bat(
-            script: """
-              @echo off
-              for /f "tokens=*" %%a in ('aws ecr list-images --repository-name %ECR_REPO% --region %AWS_REGION% --query "imageIds[*].imageTag" --output text') do echo %%a
-            """,
-            returnStdout: true
-          ).trim().split()
+          // Step 4: Load IMAGE_TAG
+          def tag = readFile('tag.txt').trim().split('=')[1]
+          env.IMAGE_TAG = tag
+          echo "Using image tag: ${env.IMAGE_TAG}"
 
-          def numericTags = tagList.findAll { it ==~ /^\d+$/ }.collect { it.toInteger() }
-          def nextTag = numericTags ? (numericTags.max() + 1) : 1
-          env.IMAGE_TAG = "${nextTag}"
-
-          echo "Building Docker Image with Tag: ${env.IMAGE_TAG}"
-
+          // Step 5: Build and Push Docker Image
           bat """
-            docker build -t ${repoUri}:${env.IMAGE_TAG} .
-            docker tag ${repoUri}:${env.IMAGE_TAG} ${repoUri}:${env.IMAGE_TAG}
-            docker push ${repoUri}:${env.IMAGE_TAG}
-          """
-        }
-      }
-    }
-
-    // For now, leaving this block commented — it uses Unix-style commands like sed and needs a Windows equivalent
-    // Let me know if you want this ported to PowerShell or Git Bash
-    /*
-    stage('Update GitOps Repo') {
-      steps {
-        script {
-          def repoUri = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.ECR_REPO}"
-          bat """
-            git clone ${env.GIT_REPO} gitops-temp
-            cd gitops-temp
-
-            powershell -Command "(Get-Content deployment.yaml) -replace 'image: .*', 'image: ${repoUri}:${env.IMAGE_TAG}' | Set-Content deployment.yaml"
-
-            git config user.email "${env.AUTHOR_EMAIL}"
-            git config user.name "${env.AUTHOR_NAME}"
-            git commit -am "Update image tag to ${env.IMAGE_TAG}"
-            git push origin main
+          docker build -t ${repoUri}:${env.IMAGE_TAG} .
+          docker push ${repoUri}:${env.IMAGE_TAG}
           """
         }
       }
     }
-    */
   }
 }
