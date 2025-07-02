@@ -2,8 +2,8 @@ pipeline {
   agent any
 
   environment {
-    IMAGE_TAG = '' // will be set later dynamically
-    ROLE_ARN = 'arn:aws:iam::420866608360:role/ECR_Push_Role' // Update with your actual role ARN
+    IMAGE_TAG = ''
+    ROLE_ARN = 'arn:aws:iam::420866608360:role/ECR_Push_Role' // Replace with your real ARN
   }
 
   stages {
@@ -35,42 +35,37 @@ pipeline {
       }
     }
 
-    stage('Assume Role and Build & Push Docker Image') {
+    stage('Assume Role, Build & Push Docker Image') {
       steps {
         script {
           def repoUri = "${env.ECR_REPO}"
 
-          // Step 1: Assume Role
-          bat """
-          powershell -Command \"
-          \$role = aws sts assume-role --role-arn '${ROLE_ARN}' --role-session-name 'jenkins-session' | ConvertFrom-Json;
-          \$env:AWS_ACCESS_KEY_ID = \$role.Credentials.AccessKeyId;
-          \$env:AWS_SECRET_ACCESS_KEY = \$role.Credentials.SecretAccessKey;
-          \$env:AWS_SESSION_TOKEN = \$role.Credentials.SessionToken;
+          // Build PowerShell script with escaped $ variables
+          def psScript = """
+            \$role = aws sts assume-role --role-arn '${ROLE_ARN}' --role-session-name 'jenkins-session' | ConvertFrom-Json
+            \$env:AWS_ACCESS_KEY_ID = \$role.Credentials.AccessKeyId
+            \$env:AWS_SECRET_ACCESS_KEY = \$role.Credentials.SecretAccessKey
+            \$env:AWS_SESSION_TOKEN = \$role.Credentials.SessionToken
 
-          # Step 2: Login to ECR
-          aws ecr get-login-password --region ${env.AWS_REGION} |
-            docker login --username AWS --password-stdin ${repoUri};
+            aws ecr get-login-password --region ${env.AWS_REGION} | docker login --username AWS --password-stdin ${repoUri}
 
-          # Step 3: Determine next image tag
-          \$tags = aws ecr list-images --repository-name ${env.ECR_REPO} --region ${env.AWS_REGION} --query 'imageIds[*].imageTag' --output text;
-          \$numTags = \$tags -split '\\s+' | Where-Object { \$_ -match '^[0-9]+$' } | ForEach-Object { [int]\$_ };
-          \$nextTag = (\$numTags | Measure-Object -Maximum).Maximum + 1;
-          if (!\$nextTag) { \$nextTag = 1 }
-          echo IMAGE_TAG=\$nextTag > tag.txt
-          \"
+            \$tags = aws ecr list-images --repository-name ${env.ECR_REPO} --region ${env.AWS_REGION} --query 'imageIds[*].imageTag' --output text
+            \$numTags = \$tags -split '\\s+' | Where-Object { \$_ -match '^[0-9]+\$' } | ForEach-Object { [int]\$_ }
+            \$nextTag = (\$numTags | Measure-Object -Maximum).Maximum + 1
+            if (!\$nextTag) { \$nextTag = 1 }
+            echo IMAGE_TAG=\$nextTag > tag.txt
+
+            docker build -t ${repoUri}:\$nextTag .
+            docker push ${repoUri}:\$nextTag
           """
 
-          // Step 4: Load IMAGE_TAG
-          def tag = readFile('tag.txt').trim().split('=')[1]
-          env.IMAGE_TAG = tag
-          echo "Using image tag: ${env.IMAGE_TAG}"
+          // Run the PowerShell block inside Jenkins
+          bat "powershell -Command \"${psScript.replace('"', '`"')}\""
 
-          // Step 5: Build and Push Docker Image
-          bat """
-          docker build -t ${repoUri}:${env.IMAGE_TAG} .
-          docker push ${repoUri}:${env.IMAGE_TAG}
-          """
+          // Read IMAGE_TAG from file and expose to pipeline
+          def tagLine = readFile('tag.txt').trim()
+          env.IMAGE_TAG = tagLine.tokenize('=')[1]
+          echo "Pushed Docker image with tag: ${env.IMAGE_TAG}"
         }
       }
     }
