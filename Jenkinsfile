@@ -31,17 +31,17 @@ pipeline {
             }
         }
 
-        stage("Code Checkout") {
-            steps {
-                echo "📦 Cloning repository..."
-                git url: gitRepo, branch: "main"
-            }
-            post {
-                success {
-                    echo "Code Successfully Cloned"
-                }
-            }
-        }
+        // stage("Code Checkout") {
+        //     steps {
+        //         echo "📦 Cloning repository..."
+        //         git url: gitRepo, branch: "main"
+        //     }
+        //     post {
+        //         success {
+        //             echo "Code Successfully Cloned"
+        //         }
+        //     }
+        // }
 
         stage("Assume Role") {
             steps {
