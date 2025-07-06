@@ -107,16 +107,18 @@ pipeline {
 
 
         stage('Generate Version Tag') {
-        steps {
-            script {
-                def number = (imageTag =~ /\d+/)[0]?.toInteger() ?: 0
-                number += 1
-                imageTag = number.toString()
+            steps {
+                script {
+                    def tagFrom = imageTag ?: "0"
+                    def match = (tagFrom =~ /\\d+/)
+                    def number = match ? match[0].toInteger() + 1 : 1
+                    imageTag = number.toString()
 
-                echo "🔖 New version tag: ${imageTag}"
+                    echo "🔖 New version tag: ${imageTag}"
+                }
             }
         }
-      }
+
 
         stage('Build Docker Image') {
             steps {
