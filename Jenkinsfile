@@ -158,4 +158,17 @@ pipeline {
             echo '❌ Pipeline failed.'
         }
     }
+
+    stage('Trigger Deployment Pipeline') {
+        steps {
+            script {
+                def imageTagFull = "${ecrRepo}:${imageTag}"
+                build job: 'gitops-pipeline',
+                    parameters: [
+                        string(name: 'IMAGE_URI', value: imageTagFull)
+                    ]
+            }
+        }
+    }
+
 }
