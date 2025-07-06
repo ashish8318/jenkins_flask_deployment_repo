@@ -148,18 +148,8 @@ pipeline {
                 """
             }
         }
-    }
 
-    post {
-        success {
-            echo '✅ Pipeline completed successfully.'
-        }
-        failure {
-            echo '❌ Pipeline failed.'
-        }
-    }
-
-    stage('Trigger Deployment Pipeline') {
+        stage('Trigger Deployment Pipeline') {
         steps {
             script {
                 def imageTagFull = "${ecrRepo}:${imageTag}"
@@ -168,6 +158,16 @@ pipeline {
                         string(name: 'IMAGE_URI', value: imageTagFull)
                     ]
             }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ Pipeline completed successfully.'
+        }
+        failure {
+            echo '❌ Pipeline failed.'
         }
     }
 
